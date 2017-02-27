@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+	<head>
+
+	</head>
+	<body>
+	<div class="canvasDiv">
+		<canvas id="canvas" width="1280" height="600" style="border:1px solid #000000;"></canvas>
+		<script>
+			var canvas = document.getElementById("canvas");
+			var ctx = canvas.getContext("2d");
+			var fov=Math.PI*0.5;
+			var rays=40;
+			var rectWidth=canvas.width/rays;
+
+			var map = [
+				[1,1,1,1,1,1,1],
+				[1,0,0,0,0,0,1],
+				[1,0,0,0,0,0,1],
+				[1,0,1,0,0,0,1],
+				[1,0,1,1,0,0,1],
+				[1,0,0,0,0,0,1],
+				[1,1,1,1,1,1,1]
+			];
+
+			var player = {
+				movementSpeed: 0.1,
+				turnSpeed: 0.1,
+				angle: 0.0,
+				position: {x:3.5, y:3.5}
+			};
+
+			window.addEventListener( "keydown", doKeyDown, false );
+			window.addEventListener( "keyup", doKeyUp, false );
+			var keysDown = {
+				w: false,
+				s: false,
+				a: false,
+				d: false
+			};
+
+			function doKeyDown(e) {
+				if(e.keyCode == 87)
+					keysDown.w = true;
+				if(e.keyCode == 83)
+					keysDown.s = true;
+				if(e.keyCode == 65)
+					keysDown.a = true;
+				if(e.keyCode == 68)
+					keysDown.d = true;
+			}
+
+			function doKeyUp(e) {
+				if(e.keyCode == 87)
+					keysDown.w = false;
+				if(e.keyCode == 83)
+					keysDown.s = false;
+				if(e.keyCode == 65)
+					keysDown.a = false;
+				if(e.keyCode == 68)
+					keysDown.d = false;
+			}
+
+			function gameLoop() {
+				update();
+				draw();
+			}
+
+			function update() {
+				movePlayer();
+				printPlayerInfo();
+			}
+
+			function movePlayer() {
+				if (keysDown.w) {
+					player.position.x += Math.sin(player.angle) * player.movementSpeed;
+					player.position.y += Math.cos(player.angle) * player.movementSpeed;
+				} else if (keysDown.s) {
+					player.position.x -= Math.sin(player.angle) * player.movementSpeed;
+					player.position.y -= Math.cos(player.angle) * player.movementSpeed;
+				} if (keysDown.a) {
+					player.angle += player.turnSpeed;
+				} if (keysDown.d) {
+					player.angle -= player.turnSpeed;
+				}
+			}
+
+			function draw() {
+				console.log('drawing');
+				ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+				var distances=[];
+
+
+				//RAYCASTING
+				for (var i = player.angle - (fov/2); i < player.angle + (fov/2); i += fov / rays)	{
+					distances.push(trace(i));
+				}
+
+				console.log(distances);
+
+				var maxdist=2.0;
+				var maxheight=canvas.height/2;
+
+				for (var j=0; j<rays; j++) {
+					var rectheight=((maxdist-distances.pop())/maxdist)*maxheight;
+					ctx.beginPath();
+					ctx.rect(j*rectWidth, maxheight-rectheight, rectWidth, rectheight*2);
+					ctx.fillStyle = "black";
+					ctx.fill();
+					ctx.closePath();
+				}
+			}
+
+			function trace(i) {
+				var farpoint = {
+					x: player.position.x + (Math.sin(i) * 8),
+					y: player.position.y + (Math.cos(i) * 8)
+				}
+
+				var playerline = pointsToLine(player.position.x, player.position.y, farpoint.x, farpoint.y);
+				var mindis=8;
+
+				for (var i=0; i<7; i++) {
+					for (var j=0; j<7; j++) {
+						if(map[i][j]==1) {
+							var top=intersect(playerline, {a:1,b:0,c:i});
+							var bottom=intersect(playerline, {a:1,b:0,c:i+1});
+							var left=intersect(playerline, {a:0,b:1,c:j});
+							var right=intersect(playerline, {a:0,b:1,c:j+1});
+
+							if (top != null && top.x >= i && top.x <= i+1) {
+								var dis=distance(player.position.x, player.position.y, top.x, top.y);
+
+								if (dis < mindis)
+									mindis=dis;
+							}
+
+							if (bottom != null && bottom.x >= i && bottom.x <= i+1) {
+								var dis=distance(player.position.x, player.position.y, bottom.x, bottom.y);
+
+								if (dis < mindis)
+									mindis=dis;
+							}
+
+							if (left != null && left.y >= j && left.y <= j+1) {
+								var dis=distance(player.position.x, player.position.y, left.x, left.y);
+
+								if (dis < mindis)
+									mindis=dis;
+							}
+
+							if (right != null && right.x >= j && right.y <= j+1) {
+								var dis=distance(player.position.x, player.position.y, right.x, right.y);
+
+								if (dis < mindis)
+									mindis=dis;
+							}
+						}
+					}
+				}
+
+				return mindis;
+			}
+
+			function intersect(line1, line2) {
+				var det = (line1.a * line2.b) - (line2.a * line1.b);
+
+				if (det==0) {
+					return null;
+				} else {
+					return {
+						x: ((line2.b * line1.c) - (line1.b * line2.c)) / det,
+						y: ((line1.a * line2.c) - (line2.a * line1.c)) / det
+					}
+				}
+			}
+
+			function distance(x1, y1, x2, y2) {
+				var a = x1 - x2;
+				var b = y1 - y2;
+				return Math.sqrt(a*a + b*b);
+			}
+
+			function pointsToLine(x1, y1, x2, y2) {
+				return {
+					a: y2-y1,
+					b: x1-x2,
+					c: ((y2-y1)*x1) + ((x1-x2)*y1)
+				};
+			}
+
+			function printPlayerInfo() {
+				console.log(player);
+			}
+
+			setInterval(gameLoop, 100);
+		</script>
+	</div>
+	</body>
+</html>
